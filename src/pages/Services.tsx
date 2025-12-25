@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
-import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import Navbar from '@/components/public/Navbar';
 import Footer from '@/components/public/Footer';
 import OfflineIndicator from '@/components/offline/OfflineIndicator';
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { motion } from 'framer-motion';
 import { 
   Sparkles, Heart, Shield, Zap, Smile, Syringe, Clock, 
-  ArrowRight, Star, CheckCircle, Search
+  ArrowRight, Star, Search
 } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 
-const iconMap = {
+const services = [
+  { id: '1', name: 'Dental Checkup', name_rw: 'Kwipimisha Amenyo', description: 'Comprehensive oral examination and cleaning', description_rw: 'Isuzuma ryuzuye ry\'akanwa no gusukiranya', duration: 30, category: 'routine', icon: 'sparkles', popular: true },
+  { id: '2', name: 'Teeth Whitening', name_rw: 'Gukorora Amenyo', description: 'Professional teeth whitening treatment', description_rw: 'Ubuvuzi bw\'amenyo bwo gukorora', duration: 60, category: 'cosmetic', icon: 'sparkles', popular: true },
+  { id: '3', name: 'Tooth Extraction', name_rw: 'Kuvura Iryinyo', description: 'Safe and painless tooth extraction', description_rw: 'Kuvura iryinyo neza kandi bitababaza', duration: 45, category: 'surgical', icon: 'syringe', popular: false },
+  { id: '4', name: 'Root Canal', name_rw: 'Kuvura Umugongo w\'Iryinyo', description: 'Treatment for infected tooth pulp', description_rw: 'Ubuvuzi bw\'umugongo w\'iryinyo', duration: 90, category: 'surgical', icon: 'shield', popular: false },
+  { id: '5', name: 'Dental Filling', name_rw: 'Kuziba Amenyo', description: 'Restore damaged teeth with fillings', description_rw: 'Gusubiza amenyo yononekaye', duration: 30, category: 'routine', icon: 'heart', popular: true },
+  { id: '6', name: 'Dental Crown', name_rw: 'Ikamba ry\'Iryinyo', description: 'Custom-made dental crowns', description_rw: 'Ikamba ry\'iryinyo rikorwa ku buryo bwihariye', duration: 60, category: 'cosmetic', icon: 'smile', popular: false },
+];
+
+const iconMap: Record<string, any> = {
   sparkles: Sparkles,
   heart: Heart,
   shield: Shield,
@@ -24,13 +30,18 @@ const iconMap = {
   syringe: Syringe,
 };
 
-const categoryColors = {
+const categoryColors: Record<string, string> = {
   routine: 'bg-blue-100 text-blue-700',
   cosmetic: 'bg-purple-100 text-purple-700',
   emergency: 'bg-red-100 text-red-700',
   surgical: 'bg-orange-100 text-orange-700',
   preventive: 'bg-green-100 text-green-700',
 };
+
+interface NavbarProps {
+  language: string;
+  setLanguage: (lang: string) => void;
+}
 
 export default function Services() {
   const [language, setLanguage] = useState(() => localStorage.getItem('lang') || 'en');
@@ -39,25 +50,19 @@ export default function Services() {
 
   useEffect(() => { localStorage.setItem('lang', language); }, [language]);
 
-  const { data: services = [] } = useQuery({
-    queryKey: ['services'],
-    queryFn: () => base44.entities.Service.list(),
-  });
-
   const categories = ['all', 'routine', 'cosmetic', 'emergency', 'surgical', 'preventive'];
 
   const filteredServices = services.filter(service => {
     const matchesSearch = service.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          service.description?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'all' || service.category === selectedCategory;
-    return matchesSearch && matchesCategory && service.status === 'active';
+    return matchesSearch && matchesCategory;
   });
 
   return (
     <div className="min-h-screen bg-white">
       <Navbar language={language} setLanguage={setLanguage} />
 
-      {/* Hero */}
       <section className="pt-32 pb-16 bg-gradient-to-br from-teal-50 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -79,7 +84,6 @@ export default function Services() {
             </p>
           </motion.div>
 
-          {/* Search & Filter */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -98,7 +102,6 @@ export default function Services() {
               </div>
             </div>
 
-            {/* Category Pills */}
             <div className="flex flex-wrap gap-3 mt-6 justify-center">
               {categories.map(cat => (
                 <button
@@ -119,7 +122,6 @@ export default function Services() {
         </div>
       </section>
 
-      {/* Services Grid */}
       <section className="py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {filteredServices.length > 0 ? (
@@ -141,15 +143,15 @@ export default function Services() {
                           <IconComponent className="w-8 h-8 text-white" />
                         </div>
                         {service.popular && (
-                          <Badge className="bg-amber-100 text-amber-700">
+                          <span className="bg-amber-100 text-amber-700 text-xs font-medium px-2 py-1 rounded">
                             {language === 'en' ? 'Popular' : 'Ikunzwe'}
-                          </Badge>
+                          </span>
                         )}
                       </div>
 
-                      <Badge className={`${categoryColors[service.category]} mb-4`}>
+                      <span className={`${categoryColors[service.category]} text-xs font-medium px-2 py-1 rounded mb-4 inline-block`}>
                         {service.category}
-                      </Badge>
+                      </span>
 
                       <h3 className="text-xl font-bold text-gray-900 mb-3">
                         {language === 'en' ? service.name : (service.name_rw || service.name)}
@@ -192,7 +194,6 @@ export default function Services() {
         </div>
       </section>
 
-      {/* CTA */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">

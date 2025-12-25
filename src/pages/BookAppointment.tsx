@@ -1,45 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Navbar from '@/components/public/Navbar';
 import Footer from '@/components/public/Footer';
-import { notifyAppointmentConfirmation } from '@/components/notifications/NotificationManager';
 import OfflineIndicator from '@/components/offline/OfflineIndicator';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { 
   Calendar as CalendarIcon, 
   Clock, 
-  User, 
-  Phone, 
   CheckCircle, 
   ArrowRight, 
   ArrowLeft,
   Sparkles
 } from 'lucide-react';
-import { toast } from 'sonner';
+
+const services = [
+  { id: '1', name: 'Dental Checkup', duration: 30 },
+  { id: '2', name: 'Teeth Whitening', duration: 60 },
+  { id: '3', name: 'Tooth Extraction', duration: 45 },
+  { id: '4', name: 'Root Canal', duration: 90 },
+  { id: '5', name: 'Dental Filling', duration: 30 },
+  { id: '6', name: 'Dental Crown', duration: 60 },
+];
+
+const dentists = [
+  { id: '1', full_name: 'Dr. Jean Baptiste', specialization: 'General Dentistry' },
+  { id: '2', full_name: 'Dr. Marie Claire', specialization: 'Orthodontics' },
+  { id: '3', full_name: 'Dr. Patrick', specialization: 'Pediatric Dentistry' },
+];
+
+const timeSlots = [
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+  '11:00', '11:30', '12:00', '12:30', '14:00', '14:30',
+  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
+  '18:00', '18:30', '19:00', '19:30'
+];
 
 export default function BookAppointment() {
   const [language, setLanguage] = useState(() => localStorage.getItem('lang') || 'en');
   const [step, setStep] = useState(1);
-  const [selectedService, setSelectedService] = useState(null);
-  const [selectedDentist, setSelectedDentist] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [selectedDentist, setSelectedDentist] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', notes: '' });
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const queryClient = useQueryClient();
-
   useEffect(() => { localStorage.setItem('lang', language); }, [language]);
 
-  // Get service from URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const serviceId = urlParams.get('service');
@@ -48,99 +57,21 @@ export default function BookAppointment() {
     }
   }, []);
 
-  const { data: services = [] } = useQuery({
-    queryKey: ['services'],
-    queryFn: () => base44.entities.Service.filter({ status: 'active' }),
-  });
-
-  const { data: staff = [] } = useQuery({
-    queryKey: ['staff-dentists'],
-    queryFn: () => base44.entities.Staff.filter({ role: 'dentist', status: 'active' }),
-  });
-
-  const { data: appointments = [] } = useQuery({
-    queryKey: ['appointments', selectedDate],
-    queryFn: () => selectedDate 
-      ? base44.entities.Appointment.filter({ date: format(selectedDate, 'yyyy-MM-dd') })
-      : [],
-    enabled: !!selectedDate,
-  });
-
-  const createAppointmentMutation = useMutation({
-    mutationFn: (data) => base44.entities.Appointment.create(data),
-    onSuccess: () => {
-      setIsSubmitted(true);
-      queryClient.invalidateQueries({ queryKey: ['appointments'] });
-    },
-  });
-
   const selectedServiceData = services.find(s => s.id === selectedService);
-  const selectedDentistData = staff.find(s => s.id === selectedDentist);
-
-  // Generate time slots
-  const generateTimeSlots = () => {
-    const slots = [];
-    const startHour = 8;
-    const endHour = 20;
-    const interval = 30;
-
-    for (let hour = startHour; hour < endHour; hour++) {
-      for (let min = 0; min < 60; min += interval) {
-        const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-        
-        // Check if slot is taken
-        const isTaken = appointments.some(apt => 
-          apt.time === time && 
-          (apt.status === 'pending' || apt.status === 'confirmed') &&
-          (!selectedDentist || apt.staff_id === selectedDentist)
-        );
-        
-        if (!isTaken) {
-          slots.push(time);
-        }
-      }
-    }
-    return slots;
-  };
-
-  const timeSlots = selectedDate ? generateTimeSlots() : [];
+  const selectedDentistData = dentists.find(s => s.id === selectedDentist);
 
   const handleSubmit = async () => {
     if (!selectedService || !selectedDate || !selectedTime || !formData.name || !formData.phone) {
-      toast.error(language === 'en' ? 'Please fill all required fields' : 'Uzuza imyanya yose isabwa');
       return;
     }
 
-    await createAppointment();
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    setIsSubmitted(true);
   };
 
-  const createAppointment = async () => {
-    const duration = selectedServiceData?.duration || 30;
-    const [hours, mins] = selectedTime.split(':').map(Number);
-    const endHours = hours + Math.floor((mins + duration) / 60);
-    const endMins = (mins + duration) % 60;
-    const endTime = `${endHours.toString().padStart(2, '0')}:${endMins.toString().padStart(2, '0')}`;
-
-    const appointmentData = {
-      patient_name: formData.name,
-      patient_phone: formData.phone,
-      service_id: selectedService,
-      service_name: selectedServiceData?.name,
-      staff_id: selectedDentist || undefined,
-      staff_name: selectedDentistData?.full_name,
-      date: format(selectedDate, 'yyyy-MM-dd'),
-      time: selectedTime,
-      end_time: endTime,
-      duration,
-      notes: formData.notes,
-      source: 'online',
-      status: 'pending',
-    };
-
-    await createAppointmentMutation.mutateAsync(appointmentData);
-
-    // Send notification
-    notifyAppointmentConfirmation(appointmentData);
+  const getMinDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
   };
 
   if (isSubmitted) {
@@ -175,7 +106,7 @@ export default function BookAppointment() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">{language === 'en' ? 'Date' : 'Itariki'}</span>
-                  <span className="font-medium">{format(selectedDate, 'MMMM d, yyyy')}</span>
+                  <span className="font-medium">{selectedDate}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">{language === 'en' ? 'Time' : 'Isaha'}</span>
@@ -207,7 +138,6 @@ export default function BookAppointment() {
 
       <div className="pt-28 pb-20">
         <div className="max-w-4xl mx-auto px-4">
-          {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -227,7 +157,6 @@ export default function BookAppointment() {
             </p>
           </motion.div>
 
-          {/* Progress Steps */}
           <div className="flex justify-center mb-12">
             <div className="flex items-center gap-4">
               {[1, 2, 3, 4].map((s) => (
@@ -243,12 +172,8 @@ export default function BookAppointment() {
             </div>
           </div>
 
-          {/* Form Container */}
-          <motion.div
-            className="bg-white rounded-3xl shadow-xl p-8 lg:p-12"
-          >
+          <motion.div className="bg-white rounded-3xl shadow-xl p-8 lg:p-12">
             <AnimatePresence mode="wait">
-              {/* Step 1: Select Service */}
               {step === 1 && (
                 <motion.div
                   key="step1"
@@ -291,7 +216,6 @@ export default function BookAppointment() {
                 </motion.div>
               )}
 
-              {/* Step 2: Select Dentist (Optional) */}
               {step === 2 && (
                 <motion.div
                   key="step2"
@@ -306,7 +230,7 @@ export default function BookAppointment() {
                     {language === 'en' ? 'Skip if you have no preference' : 'Simbuka niba nta byo ushaka by\'umwihariko'}
                   </p>
                   <div className="grid sm:grid-cols-2 gap-4">
-                    {staff.map((dentist) => (
+                    {dentists.map((dentist) => (
                       <button
                         key={dentist.id}
                         onClick={() => setSelectedDentist(dentist.id)}
@@ -317,13 +241,13 @@ export default function BookAppointment() {
                         }`}
                       >
                         <img
-                          src={dentist.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(dentist.full_name)}&background=0D9488&color=fff`}
+                          src={`https://ui-avatars.com/api/?name=${encodeURIComponent(dentist.full_name)}&background=0D9488&color=fff`}
                           alt={dentist.full_name}
                           className="w-14 h-14 rounded-full object-cover"
                         />
                         <div>
                           <h3 className="font-semibold text-gray-900">{dentist.full_name}</h3>
-                          <p className="text-sm text-gray-500">{dentist.specialization || 'General Dentist'}</p>
+                          <p className="text-sm text-gray-500">{dentist.specialization}</p>
                         </div>
                       </button>
                     ))}
@@ -344,7 +268,6 @@ export default function BookAppointment() {
                 </motion.div>
               )}
 
-              {/* Step 3: Select Date & Time */}
               {step === 3 && (
                 <motion.div
                   key="step3"
@@ -360,12 +283,12 @@ export default function BookAppointment() {
                       <label className="block text-sm font-medium text-gray-700 mb-3">
                         {language === 'en' ? 'Choose Date' : 'Hitamo Itariki'}
                       </label>
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={setSelectedDate}
-                        disabled={(date) => isBefore(date, startOfDay(new Date()))}
-                        className="rounded-xl border shadow-sm"
+                      <Input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        min={getMinDate()}
+                        className="h-12 rounded-xl"
                       />
                     </div>
                     <div>
@@ -414,7 +337,6 @@ export default function BookAppointment() {
                 </motion.div>
               )}
 
-              {/* Step 4: Personal Info */}
               {step === 4 && (
                 <motion.div
                   key="step4"
@@ -478,7 +400,6 @@ export default function BookAppointment() {
                       />
                     </div>
 
-                    {/* Summary */}
                     <div className="bg-gray-50 rounded-xl p-6">
                       <h3 className="font-semibold text-gray-900 mb-4">
                         {language === 'en' ? 'Appointment Summary' : 'Incamake y\'Gahunda'}
@@ -496,7 +417,7 @@ export default function BookAppointment() {
                         )}
                         <div className="flex justify-between">
                           <span className="text-gray-500">{language === 'en' ? 'Date' : 'Itariki'}</span>
-                          <span className="font-medium">{selectedDate && format(selectedDate, 'MMMM d, yyyy')}</span>
+                          <span className="font-medium">{selectedDate}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-500">{language === 'en' ? 'Time' : 'Isaha'}</span>
@@ -504,8 +425,6 @@ export default function BookAppointment() {
                         </div>
                       </div>
                     </div>
-
-
                   </div>
                   <div className="flex justify-between mt-8">
                     <Button variant="outline" onClick={() => setStep(3)} className="rounded-full px-8">
@@ -514,20 +433,11 @@ export default function BookAppointment() {
                     </Button>
                     <Button
                       onClick={handleSubmit}
-                      disabled={!formData.name || !formData.phone || createAppointmentMutation.isPending}
+                      disabled={!formData.name || !formData.phone}
                       className="bg-teal-600 hover:bg-teal-700 rounded-full px-8"
                     >
-                      {createAppointmentMutation.isPending ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          {language === 'en' ? 'Booking...' : 'Gukora gahunda...'}
-                        </div>
-                      ) : (
-                        <>
-                          {language === 'en' ? 'Book Appointment' : 'Fata Gahunda'}
-                          <CheckCircle className="w-4 h-4 ml-2" />
-                        </>
-                      )}
+                      {language === 'en' ? 'Submit' : 'Ohereza'}
+                      <CheckCircle className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
                 </motion.div>

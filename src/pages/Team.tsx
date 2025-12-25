@@ -1,30 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
-import { useQuery } from '@tanstack/react-query';
 import Navbar from '@/components/public/Navbar';
 import Footer from '@/components/public/Footer';
 import OfflineIndicator from '@/components/offline/OfflineIndicator';
 import { motion } from 'framer-motion';
-import { Star, Phone, Mail, Award, Calendar, Users } from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
+import { Phone, Mail, Award, Calendar, Users } from 'lucide-react';
+
+const dentists = [
+  { id: '1', full_name: 'Dr. Jean Baptiste', specialization: 'General Dentistry', bio: 'Experienced dentist with over 10 years of practice in comprehensive dental care.', phone: '+250787630399', email: 'jbaptiste@muhazidental.rw', working_days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] },
+  { id: '2', full_name: 'Dr. Marie Claire', specialization: 'Orthodontics', bio: 'Specialist in teeth alignment and corrective dental procedures.', phone: '+250787630398', email: 'mclaire@muhazidental.rw', working_days: ['Monday', 'Wednesday', 'Friday'] },
+  { id: '3', full_name: 'Dr. Patrick', specialization: 'Pediatric Dentistry', bio: 'Dedicated to providing gentle dental care for children of all ages.', phone: '+250787630397', email: 'patrick@muhazidental.rw', working_days: ['Tuesday', 'Thursday', 'Saturday'] },
+];
 
 export default function Team() {
   const [language, setLanguage] = useState(() => localStorage.getItem('lang') || 'en');
   useEffect(() => { localStorage.setItem('lang', language); }, [language]);
 
-  const { data: staff = [] } = useQuery({
-    queryKey: ['staff'],
-    queryFn: () => base44.entities.Staff.filter({ status: 'active' }),
-  });
-
-  const dentists = staff.filter(s => s.role === 'dentist');
-  const otherStaff = staff.filter(s => s.role !== 'dentist');
-
   return (
     <div className="min-h-screen bg-white">
       <Navbar language={language} setLanguage={setLanguage} />
 
-      {/* Hero */}
       <section className="pt-32 pb-16 bg-gradient-to-br from-teal-50 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -48,7 +42,6 @@ export default function Team() {
         </div>
       </section>
 
-      {/* Dentists */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
@@ -74,16 +67,16 @@ export default function Team() {
               >
                 <div className="relative h-72 overflow-hidden">
                   <img
-                    src={member.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.full_name)}&size=400&background=0D9488&color=fff`}
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member.full_name)}&size=400&background=0D9488&color=fff`}
                     alt={member.full_name}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-transparent to-transparent" />
                   <div className="absolute bottom-4 left-4 right-4">
                     <h3 className="text-xl font-bold text-white mb-1">{member.full_name}</h3>
-                    <Badge className="bg-teal-500 text-white">
+                    <span className="bg-teal-500 text-white text-xs font-medium px-2 py-1 rounded">
                       {member.specialization || (language === 'en' ? 'General Dentist' : 'Umuganga w\'Amenyo Rusange')}
-                    </Badge>
+                    </span>
                   </div>
                 </div>
 
@@ -121,53 +114,9 @@ export default function Team() {
               </motion.div>
             ))}
           </div>
-
-          {dentists.length === 0 && (
-            <div className="text-center py-16 bg-gray-50 rounded-2xl">
-              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600">
-                {language === 'en' ? 'Team information coming soon' : 'Amakuru y\'itsinda araza vuba'}
-              </h3>
-            </div>
-          )}
         </div>
       </section>
 
-      {/* Other Staff */}
-      {otherStaff.length > 0 && (
-        <section className="py-20 bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                {language === 'en' ? 'Support Staff' : 'Abakozi b\'Ubufasha'}
-              </h2>
-            </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {otherStaff.map((member, index) => (
-                <motion.div
-                  key={member.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  className="bg-white rounded-xl p-6 text-center shadow-md"
-                >
-                  <img
-                    src={member.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.full_name)}&size=200&background=0D9488&color=fff`}
-                    alt={member.full_name}
-                    className="w-20 h-20 rounded-full mx-auto mb-4 object-cover"
-                  />
-                  <h3 className="font-bold text-gray-900">{member.full_name}</h3>
-                  <p className="text-teal-600 text-sm capitalize">{member.role}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Join Team CTA */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-gradient-to-br from-teal-600 to-teal-700 rounded-3xl p-10 text-center text-white">

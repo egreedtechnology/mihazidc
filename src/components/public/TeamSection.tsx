@@ -2,21 +2,20 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { ArrowRight, Users } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
-export default function TeamSection({ language }) {
-  const { data: staff = [] } = useQuery({
-    queryKey: ['staff'],
-    queryFn: () => base44.entities.Staff.filter({ status: 'active' }),
-  });
+const dentists = [
+  { id: '1', full_name: 'Dr. Jean Baptiste', specialization: 'General Dentistry', bio: 'Experienced dentist with over 10 years of practice in comprehensive dental care.' },
+  { id: '2', full_name: 'Dr. Marie Claire', specialization: 'Orthodontics', bio: 'Specialist in teeth alignment and corrective dental procedures.' },
+  { id: '3', full_name: 'Dr. Patrick', specialization: 'Pediatric Dentistry', bio: 'Dedicated to providing gentle dental care for children of all ages.' },
+];
 
-  const dentists = staff.filter(s => s.role === 'dentist').slice(0, 3);
+interface TeamSectionProps {
+  language: string;
+}
 
-  if (dentists.length === 0) return null;
-
+export default function TeamSection({ language }: TeamSectionProps) {
   return (
     <section className="py-20 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -52,7 +51,7 @@ export default function TeamSection({ language }) {
             >
               <div className="relative h-80 overflow-hidden">
                 <img
-                  src={member.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.full_name)}&size=400&background=0D9488&color=fff`}
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member.full_name)}&size=400&background=0D9488&color=fff`}
                   alt={member.full_name}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
