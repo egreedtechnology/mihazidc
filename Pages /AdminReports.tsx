@@ -1,165 +1,163 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import Sidebar from '@/components/admin/Sidebar';
 import AdminHeader from '@/components/admin/AdminHeader';
 import OfflineIndicator from '@/components/offline/OfflineIndicator';
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import HealthRecordsSection from '@/components/health-records/HealthRecordsSection';
-import { format, parseISO } from 'date-fns';
-import { motion } from 'framer-motion';
+import { format, parseISO, subDays, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek } from 'date-fns';
 import { 
-  Users, 
-  Search, 
-  Plus,
-  Phone,
-  Mail,
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from 'recharts';
+import { 
+  BarChart3, 
+  Download,
+  TrendingUp,
+  Users,
   Calendar,
-  MoreVertical,
-  Edit,
-  Trash2,
-  Eye,
-  FileText,
-  Activity
+  DollarSign
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
 
-export default function AdminPatients() {
+const COLORS = ['#0D9488', '#0EA5E9', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981'];
+
+export default function AdminReports() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [user, setUser] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showNewDialog, setShowNewDialog] = useState(false);
-  const [editingPatient, setEditingPatient] = useState(null);
-  const [viewingPatient, setViewingPatient] = useState(null);
-  const [formData, setFormData] = useState({
-    full_name: '',
-    phone: '',
-    email: '',
-    gender: '',
-    date_of_birth: '',
-    address: '',
-    emergency_contact: '',
-    medical_history: '',
-    notes: ''
-  });
-
-  const queryClient = useQueryClient();
+  const [dateRange, setDateRange] = useState('month');
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => base44.auth.redirectToLogin());
   }, []);
 
-  const { data: patients = [], isLoading } = useQuery({
-    queryKey: ['patients'],
+  const { data: appointments = [] } = useQuery({
+    queryKey: ['appointments-reports'],
+    queryFn: () => base44.entities.Appointment.list('-created_date', 500),
+  });
+
+  const { data: payments = [] } = useQuery({
+    queryKey: ['payments-reports'],
+    queryFn: () => base44.entities.Payment.list('-created_date', 500),
+  });
+
+  const { data: patients = [] } = useQuery({
+    queryKey: ['patients-reports'],
     queryFn: () => base44.entities.Patient.list('-created_date'),
   });
 
-  const { data: appointments = [] } = useQuery({
-    queryKey: ['patient-appointments', viewingPatient?.id],
-    queryFn: () => viewingPatient 
-      ? base44.entities.Appointment.filter({ patient_id: viewingPatient.id })
-      : [],
-    enabled: !!viewingPatient,
+  const { data: services = [] } = useQuery({
+    queryKey: ['services-reports'],
+    queryFn: () => base44.entities.Service.list(),
   });
 
-  const { data: treatments = [] } = useQuery({
-    queryKey: ['patient-treatments', viewingPatient?.id],
-    queryFn: () => viewingPatient 
-      ? base44.entities.TreatmentRecord.filter({ patient_id: viewingPatient.id })
-      : [],
-    enabled: !!viewingPatient,
+  const { data: staff = [] } = useQuery({
+    queryKey: ['staff-reports'],
+    queryFn: () => base44.entities.Staff.filter({ role: 'dentist' }),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Patient.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-      setShowNewDialog(false);
-      resetForm();
-      toast.success('Patient added successfully');
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Patient.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-      setEditingPatient(null);
-      toast.success('Patient updated successfully');
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Patient.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['patients'] });
-      toast.success('Patient deleted successfully');
-    },
-  });
-
-  const resetForm = () => {
-    setFormData({
-      full_name: '',
-      phone: '',
-      email: '',
-      gender: '',
-      date_of_birth: '',
-      address: '',
-      emergency_contact: '',
-      medical_history: '',
-      notes: ''
-    });
-  };
-
-  const handleSubmit = async () => {
-    if (editingPatient) {
-      await updateMutation.mutateAsync({ id: editingPatient.id, data: formData });
-    } else {
-      await createMutation.mutateAsync(formData);
+  // Filter data by date range
+  const getDateRange = () => {
+    const today = new Date();
+    switch (dateRange) {
+      case 'week':
+        return { start: startOfWeek(today), end: endOfWeek(today) };
+      case 'month':
+        return { start: startOfMonth(today), end: endOfMonth(today) };
+      case '3months':
+        return { start: subDays(today, 90), end: today };
+      default:
+        return { start: startOfMonth(today), end: endOfMonth(today) };
     }
   };
 
-  const openEditDialog = (patient) => {
-    setFormData({
-      full_name: patient.full_name || '',
-      phone: patient.phone || '',
-      email: patient.email || '',
-      gender: patient.gender || '',
-      date_of_birth: patient.date_of_birth || '',
-      address: patient.address || '',
-      emergency_contact: patient.emergency_contact || '',
-      medical_history: patient.medical_history || '',
-      notes: patient.notes || ''
-    });
-    setEditingPatient(patient);
-  };
+  const { start, end } = getDateRange();
 
-  const filteredPatients = patients.filter(p =>
-    p.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.phone?.includes(searchQuery) ||
-    p.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Revenue by day
+  const revenueByDay = eachDayOfInterval({ start, end }).map(day => {
+    const dayStr = format(day, 'yyyy-MM-dd');
+    const dayPayments = payments.filter(p => 
+      p.created_date?.startsWith(dayStr) && p.status === 'completed'
+    );
+    return {
+      date: format(day, 'MMM d'),
+      revenue: dayPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
+    };
+  });
+
+  // Appointments by status
+  const appointmentsByStatus = [
+    { name: 'Completed', value: appointments.filter(a => a.status === 'completed').length },
+    { name: 'Confirmed', value: appointments.filter(a => a.status === 'confirmed').length },
+    { name: 'Pending', value: appointments.filter(a => a.status === 'pending').length },
+    { name: 'Cancelled', value: appointments.filter(a => a.status === 'cancelled').length },
+    { name: 'No Show', value: appointments.filter(a => a.status === 'no_show').length },
+  ].filter(s => s.value > 0);
+
+  // Service popularity
+  const servicePopularity = services.map(service => {
+    const count = appointments.filter(a => a.service_id === service.id).length;
+    return { name: service.name, count };
+  }).sort((a, b) => b.count - a.count).slice(0, 6);
+
+  // Dentist performance
+  const dentistPerformance = staff.map(dentist => {
+    const aptCount = appointments.filter(a => a.staff_id === dentist.id).length;
+    const completed = appointments.filter(a => a.staff_id === dentist.id && a.status === 'completed').length;
+    return { 
+      name: dentist.full_name?.split(' ')[0] || 'Unknown', 
+      appointments: aptCount,
+      completed
+    };
+  });
+
+  // Patient growth
+  const patientGrowth = eachDayOfInterval({ start, end }).map(day => {
+    const dayStr = format(day, 'yyyy-MM-dd');
+    const newPatients = patients.filter(p => 
+      p.created_date?.startsWith(dayStr)
+    ).length;
+    return {
+      date: format(day, 'MMM d'),
+      patients: newPatients
+    };
+  });
+
+  // Summary stats
+  const totalRevenue = payments
+    .filter(p => {
+      if (!p.created_date) return false;
+      const date = parseISO(p.created_date);
+      return date >= start && date <= end && p.status === 'completed';
+    })
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  const totalAppointments = appointments.filter(a => {
+    if (!a.date) return false;
+    const date = parseISO(a.date);
+    return date >= start && date <= end;
+  }).length;
+
+  const newPatients = patients.filter(p => {
+    if (!p.created_date) return false;
+    const date = parseISO(p.created_date);
+    return date >= start && date <= end;
+  }).length;
 
   if (!user) {
     return (
@@ -191,377 +189,209 @@ export default function AdminPatients() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Patients</h1>
-            <p className="text-gray-600">{patients.length} total patients</p>
+            <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
+            <p className="text-gray-600">Track clinic performance and trends</p>
           </div>
-          <Button onClick={() => setShowNewDialog(true)} className="bg-teal-600 hover:bg-teal-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Patient
-          </Button>
+          <div className="flex gap-3">
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="3months">Last 3 Months</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </div>
         </div>
 
-        {/* Search */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Search by name, phone, or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+        {/* Summary Cards */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Total Revenue</p>
+                  <p className="text-2xl font-bold">{totalRevenue.toLocaleString()} <span className="text-sm font-normal text-gray-500">RWF</span></p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Appointments</p>
+                  <p className="text-2xl font-bold">{totalAppointments}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                  <Users className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">New Patients</p>
+                  <p className="text-2xl font-bold">{newPatients}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Avg. Daily Revenue</p>
+                  <p className="text-2xl font-bold">
+                    {Math.round(totalRevenue / Math.max(revenueByDay.length, 1)).toLocaleString()} <span className="text-sm font-normal text-gray-500">RWF</span>
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts */}
+        <div className="grid lg:grid-cols-2 gap-6 mb-8">
+          {/* Revenue Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Revenue Trend</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={revenueByDay}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(value) => [`${value.toLocaleString()} RWF`, 'Revenue']} />
+                    <Line 
+                      type="monotone" 
+                      dataKey="revenue" 
+                      stroke="#0D9488" 
+                      strokeWidth={2}
+                      dot={{ fill: '#0D9488' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Appointments by Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Appointments by Status</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={appointmentsByStatus}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {appointmentsByStatus.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Service Popularity */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Popular Services</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={servicePopularity} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#0D9488" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Dentist Performance */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Dentist Performance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dentistPerformance}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="appointments" fill="#0EA5E9" name="Total Appointments" />
+                    <Bar dataKey="completed" fill="#10B981" name="Completed" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Patient Growth */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Patient Growth</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={patientGrowth}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="patients" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
-
-        {/* Patients Grid */}
-        {isLoading ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1,2,3,4,5,6].map(i => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-10 bg-gray-200 rounded w-10 mb-4" />
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-gray-200 rounded w-1/2" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : filteredPatients.length > 0 ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPatients.map((patient, index) => (
-              <motion.div
-                key={patient.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03 }}
-              >
-                <Card className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center">
-                        <span className="text-teal-600 font-bold text-lg">
-                          {patient.full_name?.charAt(0) || '?'}
-                        </span>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setViewingPatient(patient)}>
-                            <Eye className="w-4 h-4 mr-2" />
-                            View Profile
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEditDialog(patient)}>
-                            <Edit className="w-4 h-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => deleteMutation.mutate(patient.id)}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-
-                    <h3 className="font-semibold text-gray-900 mb-1">{patient.full_name}</h3>
-                    
-                    <div className="space-y-2 text-sm text-gray-500">
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        {patient.phone}
-                      </div>
-                      {patient.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4" />
-                          <span className="truncate">{patient.email}</span>
-                        </div>
-                      )}
-                      {patient.last_visit_date && (
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          Last visit: {format(parseISO(patient.last_visit_date), 'MMM d, yyyy')}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm">
-                      <span className="text-gray-500">{patient.total_visits || 0} visits</span>
-                      <Badge className={patient.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
-                        {patient.status || 'active'}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No patients found</h3>
-              <p className="text-gray-500 mb-4">Add your first patient to get started</p>
-              <Button onClick={() => setShowNewDialog(true)} className="bg-teal-600 hover:bg-teal-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Patient
-              </Button>
-            </CardContent>
-          </Card>
-        )}
       </main>
-
-      {/* New/Edit Patient Dialog */}
-      <Dialog open={showNewDialog || !!editingPatient} onOpenChange={(open) => {
-        if (!open) {
-          setShowNewDialog(false);
-          setEditingPatient(null);
-          resetForm();
-        }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingPatient ? 'Edit Patient' : 'Add New Patient'}</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 mt-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
-                <Input
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                  placeholder="Patient full name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                <Input
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  placeholder="+250..."
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <Input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  placeholder="email@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                <Select 
-                  value={formData.gender} 
-                  onValueChange={(v) => setFormData({...formData, gender: v})}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-                <Input
-                  type="date"
-                  value={formData.date_of_birth}
-                  onChange={(e) => setFormData({...formData, date_of_birth: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact</label>
-                <Input
-                  value={formData.emergency_contact}
-                  onChange={(e) => setFormData({...formData, emergency_contact: e.target.value})}
-                  placeholder="Name - Phone"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-              <Input
-                value={formData.address}
-                onChange={(e) => setFormData({...formData, address: e.target.value})}
-                placeholder="Patient address"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Medical History</label>
-              <Textarea
-                value={formData.medical_history}
-                onChange={(e) => setFormData({...formData, medical_history: e.target.value})}
-                placeholder="Allergies, conditions, medications..."
-                rows={3}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                placeholder="Additional notes..."
-                rows={2}
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={() => {
-                setShowNewDialog(false);
-                setEditingPatient(null);
-                resetForm();
-              }}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleSubmit}
-                disabled={!formData.full_name || !formData.phone}
-                className="bg-teal-600 hover:bg-teal-700"
-              >
-                {editingPatient ? 'Update' : 'Add'} Patient
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Patient Dialog */}
-      <Dialog open={!!viewingPatient} onOpenChange={(open) => !open && setViewingPatient(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Patient Profile</DialogTitle>
-          </DialogHeader>
-
-          {viewingPatient && (
-            <Tabs defaultValue="info" className="mt-4">
-              <TabsList>
-                <TabsTrigger value="info">Information</TabsTrigger>
-                <TabsTrigger value="health">Health Records</TabsTrigger>
-                <TabsTrigger value="history">Visit History</TabsTrigger>
-                <TabsTrigger value="treatments">Treatments</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="health" className="mt-4">
-                <HealthRecordsSection patient={viewingPatient} userRole={user?.role} />
-              </TabsContent>
-
-              <TabsContent value="info" className="mt-4">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm text-gray-500">Full Name</label>
-                      <p className="font-medium">{viewingPatient.full_name}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-500">Phone</label>
-                      <p className="font-medium">{viewingPatient.phone}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-500">Email</label>
-                      <p className="font-medium">{viewingPatient.email || '-'}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-500">Gender</label>
-                      <p className="font-medium capitalize">{viewingPatient.gender || '-'}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm text-gray-500">Date of Birth</label>
-                      <p className="font-medium">{viewingPatient.date_of_birth || '-'}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-500">Address</label>
-                      <p className="font-medium">{viewingPatient.address || '-'}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-500">Emergency Contact</label>
-                      <p className="font-medium">{viewingPatient.emergency_contact || '-'}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-500">Medical History</label>
-                      <p className="font-medium">{viewingPatient.medical_history || 'None recorded'}</p>
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="history" className="mt-4">
-                {appointments.length > 0 ? (
-                  <div className="space-y-3">
-                    {appointments.map(apt => (
-                      <div key={apt.id} className="p-4 bg-gray-50 rounded-lg flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{apt.service_name}</p>
-                          <p className="text-sm text-gray-500">
-                            {format(parseISO(apt.date), 'MMM d, yyyy')} at {apt.time}
-                          </p>
-                        </div>
-                        <Badge className={apt.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
-                          {apt.status}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    No visit history found
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="treatments" className="mt-4">
-                {treatments.length > 0 ? (
-                  <div className="space-y-3">
-                    {treatments.map(t => (
-                      <div key={t.id} className="p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="font-medium">{t.service_name}</p>
-                            <p className="text-sm text-gray-500">{t.treatment_performed}</p>
-                          </div>
-                          <span className="text-sm text-gray-500">
-                            {t.created_date && format(parseISO(t.created_date), 'MMM d, yyyy')}
-                          </span>
-                        </div>
-                        {t.notes && (
-                          <p className="mt-2 text-sm text-gray-600">{t.notes}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    No treatment records found
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
